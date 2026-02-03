@@ -39,11 +39,29 @@ Submit your API endpoint URL and you're done!
 
 ---
 
+## 🔐 API Key
+
+**Your API is secured with API key authentication.**
+
+**API Key**: `uNaRqJimOAQUK4uL-YRN_DjvHwpGiV8igbhJUUVm3NkY`
+
+Include this in the `X-API-Key` header for all requests:
+```bash
+curl -H "X-API-Key: uNaRqJimOAQUK4uL-YRN_DjvHwpGiV8igbhJUUVm3NkY" \
+     http://localhost:8001/detect \
+     -d '{"audio": "BASE64..."}'
+```
+
+See [api_key_guide.md](file:///C:/Users/vinee/.gemini/antigravity/brain/fbe116fd-c6df-4395-9630-1be81d5391a6/api_key_guide.md) for complete authentication documentation.
+
+---
+
 ## 📚 All Documentation
 
 - **[walkthrough.md](file:///C:/Users/vinee/.gemini/antigravity/brain/fbe116fd-c6df-4395-9630-1be81d5391a6/walkthrough.md)** - Complete project overview
 - **[deployment_guide.md](file:///C:/Users/vinee/.gemini/antigravity/brain/fbe116fd-c6df-4395-9630-1be81d5391a6/deployment_guide.md)** - Deployment instructions
 - **[endpoint_tester_guide.md](file:///C:/Users/vinee/.gemini/antigravity/brain/fbe116fd-c6df-4395-9630-1be81d5391a6/endpoint_tester_guide.md)** - Hackathon tester guide
+- **[api_key_guide.md](file:///C:/Users/vinee/.gemini/antigravity/brain/fbe116fd-c6df-4395-9630-1be81d5391a6/api_key_guide.md)** - API key authentication guide
 - **[bug_fix_report.md](file:///C:/Users/vinee/.gemini/antigravity/brain/fbe116fd-c6df-4395-9630-1be81d5391a6/bug_fix_report.md)** - Bug fixes applied
 
 ---

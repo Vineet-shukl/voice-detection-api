@@ -1,8 +1,9 @@
 
-from fastapi import FastAPI, HTTPException, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel, Field
 from app.core.audio import decode_base64_audio, preprocess_audio
 from app.core.model import voice_detector
+from app.config import settings
 import uvicorn
 import logging
 
@@ -24,12 +25,44 @@ class DetectionResponse(BaseModel):
     result: str
     confidence: float
 
+def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
+    """
+    Verify the API key from the request header.
+    If API_KEY is not configured, this check is skipped (development mode).
+    """
+    # If no API key is configured, allow all requests (development mode)
+    if not settings.API_KEY:
+        return True
+    
+    # If API key is configured, verify it
+    if not x_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key is required. Please provide X-API-Key header."
+        )
+    
+    if x_api_key != settings.API_KEY:
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid API key"
+        )
+    
+    return True
+
 @app.get("/")
 def read_root():
-    return {"message": "AI Voice Detection API is running. use POST /detect to analyze audio."}
+    auth_status = "enabled" if settings.API_KEY else "disabled (development mode)"
+    return {
+        "status": "healthy",
+        "message": "AI Voice Detection API is running. Use POST /detect to analyze audio.",
+        "authentication": auth_status
+    }
 
 @app.post("/detect", response_model=DetectionResponse)
-async def detect_voice(request: AudioRequest):
+async def detect_voice(
+    request: AudioRequest,
+    authenticated: bool = Depends(verify_api_key)
+):
     """
     Analyzes the provided Base64 audio and determines if it is AI-generated or Human.
     """
