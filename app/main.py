@@ -1,6 +1,7 @@
 
 from fastapi import FastAPI, HTTPException, Header, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
+from typing import Optional
 from app.core.audio import decode_base64_audio, preprocess_audio
 from app.core.model import voice_detector
 from app.config import settings
@@ -18,7 +19,19 @@ app = FastAPI(
 
 # Request Model
 class AudioRequest(BaseModel):
-    audio: str = Field(..., description="Base64 encoded audio string")
+    audio: Optional[str] = Field(None, description="Base64 encoded audio file (MP3, WAV, OGG, FLAC)")
+    audioBase64: Optional[str] = Field(None, description="Alternative field name for base64 audio")
+    language: Optional[str] = Field(None, description="Language of the audio (optional)")
+    audioFormat: Optional[str] = Field(None, description="Format of the audio file (optional)")
+    
+    @validator('audio', always=True)
+    def get_audio_data(cls, v, values):
+        # If 'audio' is not provided, use 'audioBase64'
+        if v is None and 'audioBase64' in values and values['audioBase64']:
+            return values['audioBase64']
+        if v is None:
+            raise ValueError("Either 'audio' or 'audioBase64' field is required")
+        return v
 
 # Response Model
 class DetectionResponse(BaseModel):
