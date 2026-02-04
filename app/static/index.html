@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceGuard - AI Voice Validator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; }
+        .recording-pulse { animation: pulse-red 1.5s infinite; }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="max-w-md w-full bg-slate-800 rounded-3xl shadow-2xl overflow-hidden border border-slate-700">
+        <!-- Header -->
+        <div class="p-8 pb-4 text-center">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">VoiceGuard AI</h1>
+            <p class="text-slate-400 text-sm mt-2">Deepfake Voice Detection System</p>
+        </div>
+
+        <!-- Main Interaction Area -->
+        <div class="p-8 pt-2">
+            
+            <!-- Logic Toggles -->
+            <div class="flex justify-center gap-4 mb-6">
+                <button id="recordTab" class="px-4 py-2 rounded-full bg-blue-600 text-sm font-semibold transition hover:bg-blue-500">
+                    🎤 Record
+                </button>
+                <button id="uploadTab" class="px-4 py-2 rounded-full bg-slate-700 text-sm font-semibold transition hover:bg-slate-600">
+                    📂 Upload
+                </button>
+            </div>
+
+            <!-- Record Interface -->
+            <div id="recordArea" class="flex flex-col items-center gap-4">
+                <button id="recordBtn" class="w-24 h-24 rounded-full bg-slate-700 border-4 border-slate-600 flex items-center justify-center transition hover:border-blue-500">
+                    <div id="micIcon" class="text-3xl">🎤</div>
+                </button>
+                <p id="recordStatus" class="text-xs text-slate-400">Tap to start recording</p>
+            </div>
+
+            <!-- Upload Interface (Hidden by default) -->
+            <div id="uploadArea" class="hidden flex flex-col items-center gap-4">
+                <label class="w-full h-32 flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-xl cursor-pointer hover:border-blue-500 transition hover:bg-slate-700/50">
+                    <span class="text-2xl mb-2">📥</span>
+                    <span class="text-sm text-slate-400">Click to upload Audio</span>
+                    <input type="file" id="fileInput" accept="audio/*" class="hidden">
+                </label>
+                <p id="fileName" class="text-xs text-slate-400 h-4"></p>
+            </div>
+
+            <!-- Action Button -->
+            <button id="analyzeBtn" class="w-full mt-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition transform active:scale-95" disabled>
+                Analyze Voice
+            </button>
+
+        </div>
+
+        <!-- Result Area -->
+        <div id="resultArea" class="hidden bg-slate-900/50 border-t border-slate-700 p-6 transition-all duration-500">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Analysis Result</h3>
+            
+            <div class="flex items-center justify-between mb-4">
+                <span id="resultLabel" class="text-2xl font-bold">Analysis...</span>
+                <span id="confidenceScore" class="text-sm px-3 py-1 rounded-full bg-slate-700">0%</span>
+            </div>
+            
+            <div class="w-full bg-slate-700 rounded-full h-2 mb-4">
+                <div id="confidenceBar" class="bg-blue-500 h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
+            </div>
+
+            <p id="explanationText" class="text-sm text-slate-300 leading-relaxed"></p>
+        </div>
+    </div>
+
+    <!-- API Key Input (Optional) -->
+    <div class="mt-8">
+        <input type="password" id="apiKeyInput" placeholder="Enter API Key (if required)" class="bg-slate-800 border-none rounded-lg px-4 py-2 text-sm text-center text-slate-300 w-64 focus:ring-2 focus:ring-blue-500 outline-none">
+    </div>
+
+    <script>
+        // State
+        let audioBlob = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // Elements
+        const recordTab = document.getElementById('recordTab');
+        const uploadTab = document.getElementById('uploadTab');
+        const recordArea = document.getElementById('recordArea');
+        const uploadArea = document.getElementById('uploadArea');
+        const recordBtn = document.getElementById('recordBtn');
+        const micIcon = document.getElementById('micIcon');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resultArea = document.getElementById('resultArea');
+        const resultLabel = document.getElementById('resultLabel');
+        const confidenceScore = document.getElementById('confidenceScore');
+        const confidenceBar = document.getElementById('confidenceBar');
+        const explanationText = document.getElementById('explanationText');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+
+        // Tabs
+        recordTab.onclick = () => {
+            recordTab.classList.replace('bg-slate-700', 'bg-blue-600');
+            uploadTab.classList.replace('bg-blue-600', 'bg-slate-700');
+            recordArea.classList.remove('hidden');
+            uploadArea.classList.add('hidden');
+        };
+        uploadTab.onclick = () => {
+            uploadTab.classList.replace('bg-slate-700', 'bg-blue-600');
+            recordTab.classList.replace('bg-blue-600', 'bg-slate-700');
+            uploadArea.classList.remove('hidden');
+            recordArea.classList.add('hidden');
+        };
+
+        // Recording
+        recordBtn.onclick = async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                    mediaRecorder.onstop = () => {
+                        audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                        analyzeBtn.disabled = false;
+                        analyzeBtn.textContent = "Analyze Recording";
+                    };
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordBtn.classList.add('recording-pulse', 'border-red-500', 'bg-slate-800');
+                    micIcon.textContent = "🛑";
+                    document.getElementById('recordStatus').textContent = "Recording... tap to stop";
+                } catch (e) {
+                    alert("Microphone access denied");
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.classList.remove('recording-pulse', 'border-red-500', 'bg-slate-800');
+                micIcon.textContent = "🎤";
+                document.getElementById('recordStatus').textContent = "Recording saved";
+            }
+        };
+
+        // Upload
+        fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                audioBlob = file;
+                fileName.textContent = file.name;
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = "Analyze Upload";
+            }
+        };
+
+        // Analyze
+        analyzeBtn.onclick = async () => {
+            if (!audioBlob) return;
+            
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = `<svg class="animate-spin h-5 w-5 mr-3 inline-block" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Analyzing...`;
+            resultArea.classList.add('hidden');
+
+            try {
+                // Convert to Base64
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64String = reader.result.split(',')[1];
+                    const apiKey = apiKeyInput.value || "uNaRqJimOAQUK4uL-YRN_DjvHwpGiV8igbhJUUVm3NkY";
+
+                    try {
+                        const response = await fetch('/detect', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': apiKey
+                            },
+                            body: JSON.stringify({
+                                language: "English",
+                                audioFormat: "mp3",
+                                audioBase64: base64String
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        // Show Result
+                        resultArea.classList.remove('hidden');
+                        
+                        if (data.status === 'success') {
+                            const isAI = data.classification === "AI_GENERATED";
+                            const colorClass = isAI ? 'text-red-500' : 'text-green-500';
+                            const barColor = isAI ? 'bg-red-500' : 'bg-green-500';
+                            
+                            resultLabel.className = `text-2xl font-bold ${colorClass}`;
+                            resultLabel.textContent = isAI ? "AI GENERATED 🤖" : "HUMAN VOICE 👤";
+                            
+                            const pct = Math.round(data.confidenceScore * 100);
+                            confidenceScore.textContent = `${pct}% Confidence`;
+                            confidenceBar.style.width = `${pct}%`;
+                            confidenceBar.className = `h-2 rounded-full transition-all duration-1000 ${barColor}`;
+                            
+                            explanationText.textContent = data.explanation;
+                        } else {
+                            resultLabel.textContent = "Error";
+                            resultLabel.className = "text-xl font-bold text-yellow-500";
+                            explanationText.textContent = data.message || "Unknown error occurred";
+                        }
+                    } catch (err) {
+                        alert("API Error: " + err.message);
+                    }
+                    
+                    analyzeBtn.disabled = false;
+                    analyzeBtn.textContent = "Analyze Again";
+                };
+                reader.readAsDataURL(audioBlob);
+
+            } catch (err) {
+                console.error(err);
+                analyzeBtn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>

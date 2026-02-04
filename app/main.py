@@ -1,7 +1,9 @@
 
 
 from fastapi import FastAPI, HTTPException, Header, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
 from typing import Optional, Literal
 from app.core.audio import decode_base64_audio, preprocess_audio
@@ -10,6 +12,7 @@ from app.core.explanation import generate_explanation
 from app.config import settings
 import uvicorn
 import logging
+import os
 
 # Setup Logger
 logger = logging.getLogger("api")
@@ -17,8 +20,22 @@ logger = logging.getLogger("api")
 app = FastAPI(
     title="AI Voice Detection API",
     description="API to detect whether a voice sample is AI-generated or Human.",
-    version="1.0.0"
+    version="2.0.0"
 )
+
+# CORS Security
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount Static Files (for the Web UI)
+static_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 # Custom Error Handlers (Hackathon Specification)
 @app.exception_handler(HTTPException)
@@ -112,10 +129,17 @@ def verify_api_key(x_api_key: str = Header(None, alias="X-API-Key")):
 
 @app.get("/")
 def read_root():
+    """
+    Serve the Web UI.
+    """
+    index_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    
     auth_status = "enabled" if settings.API_KEY else "disabled (development mode)"
     return {
         "status": "healthy",
-        "message": "AI Voice Detection API is running. Use POST /detect to analyze audio.",
+        "message": "AI Voice Detection API is running. (UI not found)",
         "authentication": auth_status
     }
 
