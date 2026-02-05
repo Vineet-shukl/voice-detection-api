@@ -67,10 +67,10 @@ class VoiceDetector:
         calibrated_probs = F.softmax(scaled_logits, dim=-1)
         return calibrated_probs
     
+
     def predict(self, audio_array):
         """
-        Enhanced prediction with confidence calibration.
-        Predicts whether the audio is REAL or FAKE (AI Generated).
+        Refined prediction for stability.
         """
         if self.model is None:
             self.load_model()
@@ -90,52 +90,42 @@ class VoiceDetector:
             with torch.no_grad():
                 logits = self.model(**inputs).logits
             
-            # Softmax to get probabilities
+            # Use raw softmax for the base confidence
             probs = F.softmax(logits, dim=-1)
             
-            # Apply confidence calibration (Phase 1 Enhancement)
-            # Temperature scaling makes predictions more reliable
-            calibrated_probs = self.calibrate_confidence(probs, temperature=1.3)
-            
-            # Get model labels
+            # Get model labels from config
             id2label = self.model.config.id2label
             
             # Get the predicted class index
-            pred_idx = torch.argmax(calibrated_probs, dim=-1).item()
-            label = id2label[pred_idx]
-            confidence = calibrated_probs[0][pred_idx].item()
+            pred_idx = torch.argmax(probs, dim=-1).item()
+            label = str(id2label[pred_idx]).lower()
+            confidence = probs[0][pred_idx].item()
             
-            # Get both class probabilities for better decision making
-            all_probs = calibrated_probs[0].cpu().numpy()
+            logger.info(f"Model Raw Output: Index={pred_idx}, Label={label}, Confidence={confidence:.4f}")
             
-            # Calculate prediction certainty (margin between top 2 classes)
-            sorted_probs = np.sort(all_probs)[::-1]
-            certainty_margin = sorted_probs[0] - sorted_probs[1] if len(sorted_probs) > 1 else 1.0
+            # Robust Mapping Logic
+            # mo-thecreator/Deepfake-audio-detection usually uses:
+            # 0 -> REAL, 1 -> FAKE
             
-            # Log for debugging
-            logger.info(f"Prediction: {label} (confidence: {confidence:.4f}, margin: {certainty_margin:.4f})")
-            
-            # Standardizing output as per requirement
-            # If label contains "fake" or "generated", map to "AI_GENERATED"
-            # If label contains "real" or "bonafide", map to "HUMAN"
-            
-            result_label = "UNKNOWN"
-            if "fake" in label.lower() or "spoof" in label.lower():
-                result_label = "AI_GENERATED"
-            elif "real" in label.lower() or "bonafide" in label.lower():
-                result_label = "HUMAN"
+            is_ai = False
+            if "fake" in label or "spoof" in label:
+                is_ai = True
+            elif "real" in label or "bonafide" in label:
+                is_ai = False
             else:
-                # Fallback based on index if labels are ambiguous
-                # For `mo-thecreator/Deepfake-audio-detection`:
-                # label 0: real, label 1: fake
-                result_label = label
+                # Direct index mapping fallback (very safe for this specific model)
+                if pred_idx == 1:
+                    is_ai = True
+                else:
+                    is_ai = False
             
-            # Apply confidence adjustment based on certainty margin
-            # If the model is very uncertain (close call), reduce reported confidence
-            if certainty_margin < 0.2:  # Very close call
-                confidence = confidence * 0.85  # Reduce confidence by 15%
-                logger.info(f"Low certainty margin detected, adjusted confidence to {confidence:.4f}")
-                
+            result_label = "AI_GENERATED" if is_ai else "HUMAN"
+            
+            # Stability check: If confidence is too low (< 0.6), 
+            # the model is essentially guessing.
+            if confidence < 0.6:
+                logger.info(f"Low confidence ({confidence:.4f}) detected. Result might be uncertain.")
+
             return result_label, confidence
 
         except Exception as e:
