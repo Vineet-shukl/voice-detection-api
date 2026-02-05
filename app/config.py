@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    MODEL_NAME = os.getenv("MODEL_NAME", "mo-thecreator/Deepfake-audio-detection")
+    # Try alternative model for better AI detection
+    MODEL_NAME = os.getenv("MODEL_NAME", "Hemgg/Deepfake-audio-detection")
     SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
     ALLOWED_EXTENSIONS = {"mp3", "wav", "ogg", "flac"}
     
