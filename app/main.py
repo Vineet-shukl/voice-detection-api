@@ -67,13 +67,13 @@ class AudioRequest(BaseModel):
         ..., 
         description="Language of the audio (Tamil/English/Hindi/Malayalam/Telugu)"
     )
-    audioFormat: Literal["mp3"] = Field(
+    audioFormat: Literal["mp3", "wav"] = Field(
         ..., 
-        description="Audio format (must be mp3)"
+        description="Audio format (mp3 or wav)"
     )
     audioBase64: str = Field(
         ..., 
-        description="Base64-encoded MP3 audio"
+        description="Base64-encoded audio file"
     )
 
 # Response Model (Hackathon Specification)
