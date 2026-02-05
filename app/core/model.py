@@ -5,6 +5,7 @@ import numpy as np
 from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
 from app.config import settings
 import logging
+import gc
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -18,17 +19,35 @@ class VoiceDetector:
             cls._instance = super(VoiceDetector, cls).__new__(cls)
             cls._instance.model = None
             cls._instance.feature_extractor = None
-            cls._instance.device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Force CPU to save memory on free tier
+            cls._instance.device = "cpu"
             cls._instance.load_model()
         return cls._instance
 
     def load_model(self):
         try:
             logger.info(f"Loading model {settings.MODEL_NAME} on {self.device}...")
-            self.feature_extractor = AutoFeatureExtractor.from_pretrained(settings.MODEL_NAME)
-            self.model = AutoModelForAudioClassification.from_pretrained(settings.MODEL_NAME)
+            
+            # Clear memory before loading
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            # Load with memory optimization
+            self.feature_extractor = AutoFeatureExtractor.from_pretrained(
+                settings.MODEL_NAME
+            )
+            self.model = AutoModelForAudioClassification.from_pretrained(
+                settings.MODEL_NAME,
+                low_cpu_mem_usage=True,  # Memory optimization
+                torch_dtype=torch.float32
+            )
             self.model.to(self.device)
             self.model.eval()
+            
+            # Clear unused memory
+            gc.collect()
+            
             logger.info("Model loaded successfully.")
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
