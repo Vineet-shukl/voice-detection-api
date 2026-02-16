@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceGuard — Base64 Testing Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        code,
+        pre,
+        textarea.mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .result-human {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.08));
+            border-left: 4px solid #22c55e;
+        }
+
+        .result-ai {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(249, 115, 22, 0.08));
+            border-left: 4px solid #ef4444;
+        }
+
+        .analyzer-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .score-ring {
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        textarea::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        textarea::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        textarea::-webkit-scrollbar-thumb {
+            background: rgba(96, 165, 250, 0.3);
+            border-radius: 3px;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+        }
+
+        .tag-artifact {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .tag-clean {
+            background: rgba(34, 197, 94, 0.15);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        .fade-in-delay-1 {
+            animation-delay: 0.1s;
+            opacity: 0;
+        }
+
+        .fade-in-delay-2 {
+            animation-delay: 0.2s;
+            opacity: 0;
+        }
+
+        .fade-in-delay-3 {
+            animation-delay: 0.3s;
+            opacity: 0;
+        }
+
+        .fade-in-delay-4 {
+            animation-delay: 0.4s;
+            opacity: 0;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-white min-h-screen">
+    <!-- Subtle grid background -->
+    <div class="fixed inset-0 opacity-[0.03]"
+        style="background-image: url('data:image/svg+xml,%3Csvg width=40 height=40 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cpath d=%22M0 0h40v40H0z%22 fill=%22none%22 stroke=%22white%22 stroke-width=%220.5%22/%3E%3C/svg%3E');">
+    </div>
+
+    <div class="relative z-10 max-w-5xl mx-auto px-4 py-8">
+
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div
+                class="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-medium mb-3">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                        d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" />
+                </svg>
+                Developer Console
+            </div>
+            <h1 class="text-3xl font-bold gradient-text mb-1">VoiceGuard Base64 Testing</h1>
+            <p class="text-slate-500 text-sm">Paste base64-encoded audio → Get full forensic analysis</p>
+        </div>
+
+        <!-- Input Panel -->
+        <div class="glass rounded-2xl p-6 mb-6">
+            <!-- API Key -->
+            <div class="mb-4">
+                <label class="block text-xs text-slate-400 mb-1.5 font-medium uppercase tracking-wider">🔑 API
+                    Key</label>
+                <input id="apiKey" type="password" placeholder="Enter your x-api-key here"
+                    class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-sm mono focus:outline-none focus:border-blue-500 transition-colors" />
+                <p class="text-[10px] text-slate-600 mt-1">Required if API authentication is enabled</p>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 mb-4">
+                <!-- Language -->
+                <div class="flex-1">
+                    <label
+                        class="block text-xs text-slate-400 mb-1.5 font-medium uppercase tracking-wider">Language</label>
+                    <select id="language"
+                        class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                        <option value="English">English</option>
+                        <option value="Tamil">Tamil</option>
+                        <option value="Hindi">Hindi</option>
+                        <option value="Malayalam">Malayalam</option>
+                        <option value="Telugu">Telugu</option>
+                    </select>
+                </div>
+                <!-- Format -->
+                <div class="flex-1">
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium uppercase tracking-wider">Audio
+                        Format</label>
+                    <select id="audioFormat"
+                        class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors">
+                        <option value="mp3">MP3</option>
+                        <option value="wav">WAV</option>
+                    </select>
+                </div>
+                <!-- API Endpoint -->
+                <div class="flex-1">
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium uppercase tracking-wider">API
+                        Endpoint</label>
+                    <input id="apiUrl" type="text" value="/detect"
+                        class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-sm mono focus:outline-none focus:border-blue-500 transition-colors" />
+                </div>
+                <!-- Detailed -->
+                <div class="flex-shrink-0 flex items-end pb-1">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input id="detailedMode" type="checkbox" checked
+                            class="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-500 focus:ring-blue-500/30" />
+                        <span class="text-sm text-slate-300">Detailed</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Base64 Input -->
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-1.5">
+                    <label class="text-xs text-slate-400 font-medium uppercase tracking-wider">Base64 Audio Data</label>
+                    <div class="flex gap-2">
+                        <button id="loadFileBtn" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">📂
+                            Load from file</button>
+                        <button id="pasteBtn" class="text-xs text-blue-400 hover:text-blue-300 transition-colors">📋
+                            Paste</button>
+                        <button id="clearBtn" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">✕
+                            Clear</button>
+                    </div>
+                </div>
+                <textarea id="base64Input"
+                    class="mono w-full h-40 bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-3 text-xs text-slate-300 resize-y focus:outline-none focus:border-blue-500 transition-colors placeholder-slate-600"
+                    placeholder="Paste your base64-encoded audio string here...&#10;&#10;Tip: You can also click 'Load from file' to convert an audio file to base64 automatically."
+                    spellcheck="false"></textarea>
+                <input type="file" id="hiddenFileInput" accept="audio/*" class="hidden" />
+                <div class="flex justify-between mt-1">
+                    <span id="charCount" class="text-xs text-slate-600">0 characters</span>
+                    <span id="sizeEstimate" class="text-xs text-slate-600"></span>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button id="analyzeBtn"
+                class="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 font-semibold text-sm shadow-lg shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none transition-all transform hover:scale-[1.01] active:scale-[0.99]"
+                disabled>
+                <span id="btnText">🔍 Analyze Audio</span>
+            </button>
+        </div>
+
+        <!-- Results -->
+        <div id="resultsContainer" class="hidden space-y-4">
+
+            <!-- Verdict Card -->
+            <div id="verdictCard" class="glass rounded-2xl p-6 fade-in">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Verdict</p>
+                        <h2 id="verdictLabel" class="text-3xl font-bold"></h2>
+                        <p id="verdictExplanation" class="text-sm text-slate-400 mt-2 max-w-lg leading-relaxed"></p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="relative w-24 h-24">
+                            <svg class="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)"
+                                    stroke-width="8" />
+                                <circle id="confidenceRing" cx="50" cy="50" r="42" fill="none" stroke-width="8"
+                                    stroke-linecap="round" class="score-ring" stroke-dasharray="264"
+                                    stroke-dashoffset="264" />
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span id="confidenceValue" class="text-xl font-bold"></span>
+                                <span class="text-[10px] text-slate-500 uppercase">Confidence</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Meta bar -->
+                <div class="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-700/50 text-xs text-slate-500">
+                    <span id="metaTime">⏱️ —</span>
+                    <span id="metaAgree">🤝 —</span>
+                    <span id="metaDuration">🎵 —</span>
+                    <span id="metaSNR">📶 —</span>
+                </div>
+            </div>
+
+            <!-- Analyzer Breakdown -->
+            <div id="analyzersSection" class="hidden">
+                <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Forensic Analyzers</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="analyzerGrid"></div>
+            </div>
+
+            <!-- Artifacts -->
+            <div id="artifactsSection" class="hidden glass rounded-2xl p-5 fade-in fade-in-delay-3">
+                <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Detected Artifacts</h3>
+                <div id="artifactsList" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <!-- Raw JSON -->
+            <details class="glass rounded-2xl overflow-hidden fade-in fade-in-delay-4">
+                <summary
+                    class="px-5 py-3 text-sm font-semibold text-slate-400 cursor-pointer hover:text-slate-300 transition-colors">
+                    📦 Raw JSON Response
+                </summary>
+                <pre id="rawJson" class="px-5 pb-4 text-xs text-slate-400 overflow-x-auto mono leading-relaxed"></pre>
+            </details>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8">
+            <a href="/" class="text-sm text-slate-500 hover:text-blue-400 transition-colors">← Back to Main UI</a>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const base64Input = document.getElementById('base64Input');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const btnText = document.getElementById('btnText');
+        const charCount = document.getElementById('charCount');
+        const sizeEstimate = document.getElementById('sizeEstimate');
+        const resultsContainer = document.getElementById('resultsContainer');
+
+        // Character count & enable button
+        base64Input.addEventListener('input', () => {
+            const len = base64Input.value.trim().length;
+            charCount.textContent = `${len.toLocaleString()} characters`;
+            if (len > 0) {
+                const sizeKB = Math.round(len * 0.75 / 1024);
+                sizeEstimate.textContent = `≈ ${sizeKB > 1024 ? (sizeKB / 1024).toFixed(1) + ' MB' : sizeKB + ' KB'} audio`;
+            } else {
+                sizeEstimate.textContent = '';
+            }
+            analyzeBtn.disabled = len === 0;
+        });
+
+        // Paste button
+        document.getElementById('pasteBtn').onclick = async () => {
+            try {
+                const text = await navigator.clipboard.readText();
+                base64Input.value = text;
+                base64Input.dispatchEvent(new Event('input'));
+            } catch { alert('Clipboard access denied.'); }
+        };
+
+        // Clear button
+        document.getElementById('clearBtn').onclick = () => {
+            base64Input.value = '';
+            base64Input.dispatchEvent(new Event('input'));
+            resultsContainer.classList.add('hidden');
+        };
+
+        // Load from file → auto-convert to base64
+        const hiddenFileInput = document.getElementById('hiddenFileInput');
+        document.getElementById('loadFileBtn').onclick = () => hiddenFileInput.click();
+        hiddenFileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                let b64 = reader.result;
+                if (b64.includes('base64,')) b64 = b64.split('base64,')[1];
+                base64Input.value = b64;
+                base64Input.dispatchEvent(new Event('input'));
+
+                // Auto-detect format
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (ext === 'wav') document.getElementById('audioFormat').value = 'wav';
+                else document.getElementById('audioFormat').value = 'mp3';
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // Analyze
+        analyzeBtn.onclick = async () => {
+            const b64 = base64Input.value.trim();
+            if (!b64) return;
+
+            analyzeBtn.disabled = true;
+            btnText.innerHTML = '<svg class="spinner inline-block w-4 h-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Running 5-stage analysis...';
+            resultsContainer.classList.add('hidden');
+
+            const detailed = document.getElementById('detailedMode').checked;
+            const apiUrl = document.getElementById('apiUrl').value + (detailed ? '?detailed=true' : '');
+
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                const apiKeyVal = document.getElementById('apiKey').value.trim();
+                if (apiKeyVal) headers['x-api-key'] = apiKeyVal;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        language: document.getElementById('language').value,
+                        audioFormat: document.getElementById('audioFormat').value,
+                        audioBase64: b64
+                    })
+                });
+
+                const data = await response.json();
+                renderResults(data);
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+
+            analyzeBtn.disabled = false;
+            btnText.textContent = '🔍 Analyze Again';
+        };
+
+        function renderResults(data) {
+            resultsContainer.classList.remove('hidden');
+
+            // Verdict
+            const isAI = data.classification === 'AI_GENERATED';
+            const verdictCard = document.getElementById('verdictCard');
+            verdictCard.querySelector('#verdictLabel').textContent = isAI ? '🤖 AI Generated' : '👤 Human Voice';
+            verdictCard.querySelector('#verdictLabel').className = `text-3xl font-bold ${isAI ? 'text-red-400' : 'text-green-400'}`;
+            verdictCard.querySelector('#verdictExplanation').textContent = data.explanation || '';
+
+            // Confidence ring
+            const pct = Math.round((data.confidenceScore || 0) * 100);
+            const ring = document.getElementById('confidenceRing');
+            const offset = 264 - (264 * pct / 100);
+            ring.style.stroke = isAI ? '#ef4444' : '#22c55e';
+            setTimeout(() => { ring.style.strokeDashoffset = offset; }, 50);
+            document.getElementById('confidenceValue').textContent = pct + '%';
+            document.getElementById('confidenceValue').className = `text-xl font-bold ${isAI ? 'text-red-400' : 'text-green-400'}`;
+
+            // Meta bar
+            document.getElementById('metaTime').textContent = `⏱️ ${data.inferenceTimeMs ? data.inferenceTimeMs + 'ms' : '—'}`;
+            document.getElementById('metaAgree').textContent = data.analyzersAgree ? '🤝 Analyzers agree' : '⚡ Analyzers disagree';
+
+            if (data.audioProfile) {
+                document.getElementById('metaDuration').textContent = `🎵 ${data.audioProfile.duration_sec}s`;
+                document.getElementById('metaSNR').textContent = `📶 SNR ${data.audioProfile.snr_db}dB`;
+            }
+
+            // Forensic analyzers
+            const analyzersSection = document.getElementById('analyzersSection');
+            const analyzerGrid = document.getElementById('analyzerGrid');
+            analyzerGrid.innerHTML = '';
+
+            if (data.forensics) {
+                analyzersSection.classList.remove('hidden');
+                const analyzerNames = {
+                    'neural_model': { icon: '🧠', label: 'Neural Model' },
+                    'spectral_analysis': { icon: '🌈', label: 'Spectral Analysis' },
+                    'temporal_analysis': { icon: '⏱️', label: 'Temporal Analysis' },
+                    'formant_analysis': { icon: '🔊', label: 'Formant Analysis' },
+                    'artifact_detection': { icon: '🔍', label: 'Artifact Detection' },
+                };
+
+                for (const [key, val] of Object.entries(data.forensics)) {
+                    const info = analyzerNames[key] || { icon: '📊', label: key };
+                    const score = val.score || 0;
+                    const scorePct = Math.round(score * 100);
+                    const isItemAI = (val.verdict === 'AI_GENERATED');
+                    const artifacts = val.artifacts_found || [];
+
+                    const card = document.createElement('div');
+                    card.className = 'analyzer-card rounded-xl p-4 fade-in';
+
+                    let artifactHtml = '';
+                    if (artifacts.length > 0) {
+                        artifactHtml = '<div class="flex flex-wrap gap-1 mt-2">' +
+                            artifacts.map(a => `<span class="tag tag-artifact">${a.replace(/_/g, ' ')}</span>`).join('') +
+                            '</div>';
+                    } else {
+                        artifactHtml = '<div class="mt-2"><span class="tag tag-clean">✓ No artifacts</span></div>';
+                    }
+
+                    // Details
+                    let detailsHtml = '';
+                    if (val.details && Object.keys(val.details).length > 0) {
+                        detailsHtml = '<details class="mt-2"><summary class="text-[10px] text-slate-600 cursor-pointer hover:text-slate-400">Details</summary>' +
+                            '<div class="mt-1 text-[10px] text-slate-500 mono space-y-0.5">' +
+                            Object.entries(val.details).map(([k, v]) => `<div>${k}: <span class="text-slate-400">${typeof v === 'number' ? v.toFixed(4) : v}</span></div>`).join('') +
+                            '</div></details>';
+                    }
+
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">${info.icon}</span>
+                                <span class="text-sm font-semibold text-slate-200">${info.label}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono ${isItemAI ? 'text-red-400' : 'text-green-400'}">${scorePct}%</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full ${isItemAI ? 'bg-red-500/15 text-red-400' : 'bg-green-500/15 text-green-400'}">${val.verdict || '—'}</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5">
+                            <div class="h-1.5 rounded-full transition-all duration-700 ${isItemAI ? 'bg-red-500' : 'bg-green-500'}" style="width: ${scorePct}%"></div>
+                        </div>
+                        ${artifactHtml}
+                        ${detailsHtml}
+                    `;
+                    analyzerGrid.appendChild(card);
+                }
+            } else {
+                analyzersSection.classList.add('hidden');
+            }
+
+            // Artifacts summary
+            const artifactsSection = document.getElementById('artifactsSection');
+            const artifactsList = document.getElementById('artifactsList');
+            artifactsList.innerHTML = '';
+
+            if (data.artifactsSummary && data.artifactsSummary.length > 0) {
+                artifactsSection.classList.remove('hidden');
+                data.artifactsSummary.forEach(a => {
+                    const span = document.createElement('span');
+                    span.className = 'tag tag-artifact';
+                    span.textContent = a.replace(/_/g, ' ');
+                    artifactsList.appendChild(span);
+                });
+            } else {
+                artifactsSection.classList.add('hidden');
+            }
+
+            // Raw JSON
+            document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+        }
+    </script>
+</body>
+
+</html>

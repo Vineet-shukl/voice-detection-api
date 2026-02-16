@@ -1,0 +1,35 @@
+# Environment and secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+
+# Test audio files
+tests/audio_samples/
+*.wav
+*.mp3
+
+# IDE
+.vscode/
+.idea/
+
+# Binary/output files
+base64_output.txt
+*.zip
+*.mp4
+cleanup.sh
