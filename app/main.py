@@ -140,15 +140,15 @@ def verify_api_key(
     x_api_key_lower: str = Header(None, alias="x-api-key"),
     x_api_key_upper: str = Header(None, alias="X-API-Key")
 ):
-    x_api_key = x_api_key_lower or x_api_key_upper
+    provided_api_key = x_api_key_lower or x_api_key_upper
     if not settings.API_KEY:
         return True
-    if not x_api_key:
+    if not provided_api_key:
         raise HTTPException(
             status_code=401,
             detail="API key is required. Please provide x-api-key header."
         )
-    if x_api_key != settings.API_KEY:
+    if provided_api_key != settings.API_KEY:
         raise HTTPException(status_code=403, detail="Invalid API key")
     return True
 
@@ -211,10 +211,10 @@ async def detect_voice(
     """
     try:
         # 1. Decode Base64
-        audio_file = decode_base64_audio(request.audioBase64)
+        decoded_audio_file = decode_base64_audio(request.audioBase64)
 
         # 2. Preprocess Audio (now returns profile too)
-        audio_array, audio_profile = preprocess_audio(audio_file)
+        audio_array, audio_profile = preprocess_audio(decoded_audio_file)
 
         # 3. Full Detection Pipeline (neural + forensics + fusion)
         result = voice_detector.predict(
@@ -246,10 +246,10 @@ async def detect_voice(
 
         return response
 
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        logger.error(f"Error processing request: {str(e)}")
+    except HTTPException as http_error:
+        raise http_error
+    except Exception as unexpected_error:
+        logger.error(f"Error processing request: {str(unexpected_error)}")
         raise HTTPException(
             status_code=500,
             detail="Internal server error processing the audio"

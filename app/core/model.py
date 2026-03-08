@@ -54,10 +54,10 @@ class VoiceDetector:
             logger.error(f"Failed to load model: {e}")
             raise RuntimeError(f"Failed to load model: {e}")
 
-    def _infer_single(self, audio_array: np.ndarray) -> tuple:
+    def _infer_single(self, audio_segment: np.ndarray) -> tuple:
         """Run model inference on a single audio segment."""
         inputs = self.feature_extractor(
-            audio_array,
+            audio_segment,
             sampling_rate=settings.SAMPLE_RATE,
             return_tensors="pt",
             padding=True
@@ -67,30 +67,30 @@ class VoiceDetector:
         with torch.no_grad():
             logits = self.model(**inputs).logits
 
-        probs = F.softmax(logits, dim=-1)
-        pred_idx = torch.argmax(probs, dim=-1).item()
-        confidence = probs[0][pred_idx].item()
+        class_probabilities = F.softmax(logits, dim=-1)
+        predicted_class_index = torch.argmax(class_probabilities, dim=-1).item()
+        segment_confidence = class_probabilities[0][predicted_class_index].item()
 
         # Get model label
         id2label = self.model.config.id2label
-        label = str(id2label[pred_idx]).lower()
+        model_label = str(id2label[predicted_class_index]).lower()
 
         # Map to binary: is it AI?
-        is_ai = False
-        if "fake" in label or "spoof" in label:
-            is_ai = True
-        elif "real" in label or "bonafide" in label:
-            is_ai = False
+        is_ai_generated = False
+        if "fake" in model_label or "spoof" in model_label:
+            is_ai_generated = True
+        elif "real" in model_label or "bonafide" in model_label:
+            is_ai_generated = False
         else:
-            is_ai = (pred_idx == 1)
+            is_ai_generated = (predicted_class_index == 1)
 
         # Return P(AI) score (0=human, 1=AI)
-        if is_ai:
-            ai_score = confidence
+        if is_ai_generated:
+            ai_probability_score = segment_confidence
         else:
-            ai_score = 1.0 - confidence
+            ai_probability_score = 1.0 - segment_confidence
 
-        return ai_score, confidence, is_ai
+        return ai_probability_score, segment_confidence, is_ai_generated
 
     def predict(self, audio_array: np.ndarray, audio_profile: dict = None,
                 detailed: bool = False) -> dict:
@@ -105,22 +105,22 @@ class VoiceDetector:
         if self.model is None:
             self.load_model()
 
-        start_time = time.time()
+        pipeline_start_time = time.time()
 
         try:
-            sr = settings.SAMPLE_RATE
+            sample_rate = settings.SAMPLE_RATE
 
             # ====== Stage 1: Multi-Segment Neural Inference ======
             # Optimization: No overlap, max 3 segments (first 15s is substantial for detection)
-            segments = segment_audio(audio_array, sr, segment_sec=5.0, overlap_sec=0.0)
+            segments = segment_audio(audio_array, sample_rate, segment_sec=5.0, overlap_sec=0.0)
             if len(segments) > 3:
                 segments = segments[:3]
             
             segment_scores = []
 
-            for seg in segments:
-                ai_score, conf, is_ai = self._infer_single(seg)
-                segment_scores.append(ai_score)
+            for audio_segment in segments:
+                ai_probability_score, segment_confidence, is_ai_generated = self._infer_single(audio_segment)
+                segment_scores.append(ai_probability_score)
 
             # Aggregate: use mean
             neural_score = float(np.mean(segment_scores))
@@ -151,7 +151,7 @@ class VoiceDetector:
                 final_confidence = neural_confidence
 
             else:
-                forensic_results = forensic_engine.analyze(audio_array, sr)
+                forensic_results = forensic_engine.analyze(audio_array, sample_rate)
                 forensic_score = forensic_engine.compute_forensic_score(forensic_results)
                 all_artifacts = forensic_engine.get_all_artifacts(forensic_results)
 
@@ -163,15 +163,15 @@ class VoiceDetector:
                 # ====== Stage 3: Score Fusion ======
                 # Neural model gets higher weight (it's trained on actual data)
                 # Forensics provide supporting evidence and catch edge cases
-                NEURAL_WEIGHT = 0.75
-                FORENSIC_WEIGHT = 0.25
+                NEURAL_MODEL_WEIGHT = 0.75
+                FORENSIC_ANALYSIS_WEIGHT = 0.25
 
-                fused_score = (neural_score * NEURAL_WEIGHT) + (forensic_score * FORENSIC_WEIGHT)
+                fused_score = (neural_score * NEURAL_MODEL_WEIGHT) + (forensic_score * FORENSIC_ANALYSIS_WEIGHT)
 
                 # Boost confidence if neural and forensics agree
-                neural_says_ai = neural_score >= 0.5
-                forensic_says_ai = forensic_score >= 0.4
-                agreement = (neural_says_ai == forensic_says_ai)
+                neural_model_predicts_ai = neural_score >= 0.5
+                forensic_analysis_predicts_ai = forensic_score >= 0.4
+                agreement = (neural_model_predicts_ai == forensic_analysis_predicts_ai)
 
                 if agreement:
                     # Both agree → push score further from 0.5
@@ -183,9 +183,9 @@ class VoiceDetector:
                 
                 if final_verdict == "AI_GENERATED":
                      # Boost AI confidence per user request
-                     boosted_score = fused_score + 0.18
+                     ai_confidence_boosted = fused_score + 0.18
                      # Cap at 0.94
-                     fused_score = min(0.94, boosted_score)
+                     fused_score = min(0.94, ai_confidence_boosted)
                      final_confidence = fused_score
                 else:
                      final_confidence = 1.0 - fused_score
@@ -193,12 +193,12 @@ class VoiceDetector:
                 # Ensure minimum confidence floor
                 final_confidence = max(final_confidence, 0.51)
 
-            inference_time = round((time.time() - start_time) * 1000, 1)
+            total_inference_time_ms = round((time.time() - pipeline_start_time) * 1000, 1)
 
             logger.info(
                 f"FINAL: {final_verdict} (confidence={final_confidence:.4f}, "
                 f"fused={fused_score:.4f}, neural={neural_score:.4f}, "
-                f"forensic={forensic_score:.4f}, time={inference_time}ms)"
+                f"forensic={forensic_score:.4f}, time={total_inference_time_ms}ms)"
             )
 
             # ====== Build Response ======
@@ -206,7 +206,7 @@ class VoiceDetector:
                 "classification": final_verdict,
                 "confidence": round(final_confidence, 4),
                 "fused_score": round(fused_score, 4),
-                "inference_time_ms": inference_time,
+                "inference_time_ms": total_inference_time_ms,
                 "analyzers_agree": agreement,
             }
 

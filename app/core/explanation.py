@@ -56,71 +56,71 @@ def generate_explanation(result: Dict[str, Any]) -> str:
 
 def _explain_ai(confidence: float, agreement: bool, artifacts: List[str]) -> str:
     """Generate explanation for AI_GENERATED verdict."""
-    parts = []
+    explanation_parts = []
 
     # Opening based on confidence
     if confidence > 0.90:
-        parts.append("Strong indicators of AI-generated speech detected")
+        explanation_parts.append("Strong indicators of AI-generated speech detected")
     elif confidence > 0.75:
-        parts.append("Multiple indicators of synthetic voice generation detected")
+        explanation_parts.append("Multiple indicators of synthetic voice generation detected")
     elif confidence > 0.60:
-        parts.append("Moderate indicators of AI voice synthesis detected")
+        explanation_parts.append("Moderate indicators of AI voice synthesis detected")
     else:
-        parts.append("Weak indicators of possible AI generation detected")
+        explanation_parts.append("Weak indicators of possible AI generation detected")
 
     # Cite specific evidence
     if artifacts:
         evidence = _describe_top_artifacts(artifacts, max_items=3)
         if evidence:
-            parts.append(f"Evidence: {evidence}")
+            explanation_parts.append(f"Evidence: {evidence}")
 
     # Agreement note
     if agreement:
-        parts.append("Neural model and forensic analyzers are in agreement")
+        explanation_parts.append("Neural model and forensic analyzers are in agreement")
     else:
-        parts.append("Note: forensic analyzers show mixed signals — result may warrant manual review")
+        explanation_parts.append("Note: forensic analyzers show mixed signals — result may warrant manual review")
 
-    return ". ".join(parts) + "."
+    return ". ".join(explanation_parts) + "."
 
 
 def _explain_human(confidence: float, agreement: bool, artifacts: List[str]) -> str:
     """Generate explanation for HUMAN verdict."""
-    parts = []
+    explanation_parts = []
 
     if confidence > 0.90:
-        parts.append("Natural human voice characteristics confirmed with high confidence")
+        explanation_parts.append("Natural human voice characteristics confirmed with high confidence")
     elif confidence > 0.75:
-        parts.append("Authentic human speech patterns and natural variations detected")
+        explanation_parts.append("Authentic human speech patterns and natural variations detected")
     elif confidence > 0.60:
-        parts.append("Voice exhibits predominantly human characteristics")
+        explanation_parts.append("Voice exhibits predominantly human characteristics")
     else:
-        parts.append("Voice classified as human with moderate confidence")
+        explanation_parts.append("Voice classified as human with moderate confidence")
 
     # Note any artifacts still found (for transparency)
     if artifacts:
-        parts.append(
+        explanation_parts.append(
             f"Minor note: {len(artifacts)} analysis flag(s) present but within normal range"
         )
 
     if agreement:
-        parts.append("All analysis channels confirm this assessment")
+        explanation_parts.append("All analysis channels confirm this assessment")
 
-    return ". ".join(parts) + "."
+    return ". ".join(explanation_parts) + "."
 
 
 def _describe_top_artifacts(artifacts: List[str], max_items: int = 3) -> str:
     """Convert artifact codes to human-readable descriptions."""
-    descriptions = []
+    human_readable_descriptions = []
     for artifact in artifacts[:max_items]:
-        desc = ARTIFACT_DESCRIPTIONS.get(artifact, artifact.replace("_", " "))
-        descriptions.append(desc.lower())
+        artifact_description = ARTIFACT_DESCRIPTIONS.get(artifact, artifact.replace("_", " "))
+        human_readable_descriptions.append(artifact_description.lower())
 
-    if not descriptions:
+    if not human_readable_descriptions:
         return ""
 
-    if len(descriptions) == 1:
-        return descriptions[0]
-    elif len(descriptions) == 2:
-        return f"{descriptions[0]} and {descriptions[1]}"
+    if len(human_readable_descriptions) == 1:
+        return human_readable_descriptions[0]
+    elif len(human_readable_descriptions) == 2:
+        return f"{human_readable_descriptions[0]} and {human_readable_descriptions[1]}"
     else:
-        return f"{', '.join(descriptions[:-1])}, and {descriptions[-1]}"
+        return f"{', '.join(human_readable_descriptions[:-1])}, and {human_readable_descriptions[-1]}"

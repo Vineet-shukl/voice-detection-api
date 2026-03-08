@@ -25,15 +25,15 @@ def decode_base64_audio(base64_string: str) -> io.BytesIO:
         raise HTTPException(status_code=400, detail=f"Invalid Base64 audio: {str(e)}")
 
 
-def compute_audio_profile(y: np.ndarray, sr: int) -> dict:
+def compute_audio_profile(audio_samples: np.ndarray, sample_rate: int) -> dict:
     """
     Compute a technical profile of the audio sample.
     Returns metadata useful for quality assessment and forensic analysis.
     """
-    duration = len(y) / sr
+    duration = len(audio_samples) / sample_rate
 
     # RMS energy (simple vector op)
-    rms = float(np.sqrt(np.mean(y ** 2)))
+    rms_energy = float(np.sqrt(np.mean(audio_samples ** 2)))
 
     # Optimization: Skip expensive spectral SNR calculation here
     # (It requires STFT/RMS framing which takes ~100ms)
@@ -43,46 +43,46 @@ def compute_audio_profile(y: np.ndarray, sr: int) -> dict:
     # Clipping detection — samples at or near ±1.0
     clip_threshold = 0.999
     # Vectorized fast check
-    clipping_ratio = float(np.mean(np.abs(y) > clip_threshold))
+    clipping_ratio = float(np.mean(np.abs(audio_samples) > clip_threshold))
     clipping_detected = clipping_ratio > 0.001
 
     # Silence ratio (vectorized)
-    silence_threshold = rms * 0.1
-    silence_ratio = float(np.mean(np.abs(y) < silence_threshold))
+    silence_threshold = rms_energy * 0.1
+    silence_ratio = float(np.mean(np.abs(audio_samples) < silence_threshold))
 
     return {
         "duration_sec": round(duration, 2),
         "snr_db": round(snr_db, 1), # Placeholder, computed later if needed
         "clipping_detected": clipping_detected,
         "silence_ratio": round(silence_ratio, 3),
-        "rms_energy": round(rms, 4),
-        "sample_rate": sr,
+        "rms_energy": round(rms_energy, 4),
+        "sample_rate": sample_rate,
     }
 
 
-def segment_audio(y: np.ndarray, sr: int, segment_sec: float = 5.0,
+def segment_audio(audio_samples: np.ndarray, sample_rate: int, segment_sec: float = 5.0,
                   overlap_sec: float = 1.0) -> list:
     """
     Split audio into overlapping segments for per-segment analysis.
     Short audio (< segment_sec) is returned as a single segment.
     """
-    segment_len = int(segment_sec * sr)
-    hop_len = int((segment_sec - overlap_sec) * sr)
+    segment_length_samples = int(segment_sec * sample_rate)
+    hop_length_samples = int((segment_sec - overlap_sec) * sample_rate)
 
-    if len(y) <= segment_len:
-        return [y]
+    if len(audio_samples) <= segment_length_samples:
+        return [audio_samples]
 
     segments = []
     start = 0
-    while start < len(y):
-        end = min(start + segment_len, len(y))
-        seg = y[start:end]
+    while start < len(audio_samples):
+        end = min(start + segment_length_samples, len(audio_samples))
+        audio_segment = audio_samples[start:end]
         # Only include if at least 1 second long
-        if len(seg) >= sr:
-            segments.append(seg)
-        start += hop_len
+        if len(audio_segment) >= sample_rate:
+            segments.append(audio_segment)
+        start += hop_length_samples
 
-    return segments if segments else [y]
+    return segments if segments else [audio_samples]
 
 
 def preprocess_audio(audio_file: io.BytesIO):
@@ -95,41 +95,41 @@ def preprocess_audio(audio_file: io.BytesIO):
         # Save to temporary file for librosa
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
             tmp_file.write(audio_file.read())
-            tmp_path = tmp_file.name
+            temp_audio_file_path = tmp_file.name
 
         try:
             # Load audio at 16kHz (Standard for Wav2Vec2)
-            y, sr = librosa.load(tmp_path, sr=settings.SAMPLE_RATE)
+            audio_samples, sample_rate = librosa.load(temp_audio_file_path, sr=settings.SAMPLE_RATE)
 
             # Ensure mono
-            if len(y.shape) > 1:
-                y = librosa.to_mono(y)
+            if len(audio_samples.shape) > 1:
+                audio_samples = librosa.to_mono(audio_samples)
 
             # Reject extremely short audio
-            if len(y) < sr * 0.3:
+            if len(audio_samples) < sample_rate * 0.3:
                 raise HTTPException(
                     status_code=400,
                     detail="Audio too short. Minimum 0.3 seconds required."
                 )
 
             # 1. Basic Silence Trimming (Safer threshold)
-            y_trimmed, _ = librosa.effects.trim(y, top_db=40)
-            if len(y_trimmed) > sr * 0.1:
-                y = y_trimmed
+            silence_trimmed_audio, _ = librosa.effects.trim(audio_samples, top_db=40)
+            if len(silence_trimmed_audio) > sample_rate * 0.1:
+                audio_samples = silence_trimmed_audio
 
             # 2. Gentle Peak Normalization
             # Preserves natural dynamics which models use for detection
-            peak = np.max(np.abs(y))
-            if peak > 0:
-                y = y / peak
+            peak_amplitude = np.max(np.abs(audio_samples))
+            if peak_amplitude > 0:
+                audio_samples = audio_samples / peak_amplitude
 
             # 3. Time Clamping — max 30 seconds
             max_duration = 30
-            if len(y) > sr * max_duration:
-                y = y[:sr * max_duration]
+            if len(audio_samples) > sample_rate * max_duration:
+                audio_samples = audio_samples[:sample_rate * max_duration]
 
             # 4. Compute audio profile
-            profile = compute_audio_profile(y, sr)
+            profile = compute_audio_profile(audio_samples, sample_rate)
 
             logger.info(
                 f"Preprocessing complete: {profile['duration_sec']}s, "
@@ -137,11 +137,11 @@ def preprocess_audio(audio_file: io.BytesIO):
                 f"clipping={'YES' if profile['clipping_detected'] else 'NO'}"
             )
 
-            return y, profile
+            return audio_samples, profile
 
         finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            if os.path.exists(temp_audio_file_path):
+                os.unlink(temp_audio_file_path)
 
     except HTTPException:
         raise
