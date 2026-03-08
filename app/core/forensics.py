@@ -50,40 +50,40 @@ class SpectralAnalyzer:
     - Abnormal spectral flatness
     """
 
-    def analyze(self, y: np.ndarray, sr: int) -> AnalyzerResult:
+    def analyze(self, audio_samples: np.ndarray, sample_rate: int) -> AnalyzerResult:
         artifacts = []
         details = {}
 
         try:
             # 1. Spectral Flatness — AI speech tends to have lower flatness (more tonal)
-            flatness = librosa.feature.spectral_flatness(y=y)[0]
-            mean_flatness = float(np.mean(flatness))
-            std_flatness = float(np.std(flatness))
-            details["spectral_flatness_mean"] = round(mean_flatness, 4)
-            details["spectral_flatness_std"] = round(std_flatness, 4)
+            spectral_flatness_frames = librosa.feature.spectral_flatness(y=audio_samples)[0]
+            mean_spectral_flatness = float(np.mean(spectral_flatness_frames))
+            std_spectral_flatness = float(np.std(spectral_flatness_frames))
+            details["spectral_flatness_mean"] = round(mean_spectral_flatness, 4)
+            details["spectral_flatness_std"] = round(std_spectral_flatness, 4)
 
             # Human speech has higher variance in spectral flatness
-            if std_flatness < 0.02:
+            if std_spectral_flatness < 0.02:
                 artifacts.append("unnaturally_uniform_spectral_texture")
-            if mean_flatness < 0.005:
+            if mean_spectral_flatness < 0.005:
                 artifacts.append("overly_tonal_spectrum")
 
             # 2. Spectral Bandwidth — AI audio often has narrower bandwidth
-            bandwidth = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
-            mean_bw = float(np.mean(bandwidth))
-            std_bw = float(np.std(bandwidth))
-            details["spectral_bandwidth_mean"] = round(mean_bw, 1)
-            details["spectral_bandwidth_std"] = round(std_bw, 1)
+            spectral_bandwidth_frames = librosa.feature.spectral_bandwidth(y=audio_samples, sr=sample_rate)[0]
+            mean_bandwidth = float(np.mean(spectral_bandwidth_frames))
+            std_bandwidth = float(np.std(spectral_bandwidth_frames))
+            details["spectral_bandwidth_mean"] = round(mean_bandwidth, 1)
+            details["spectral_bandwidth_std"] = round(std_bandwidth, 1)
 
-            if std_bw < 200:
+            if std_bandwidth < 200:
                 artifacts.append("unnaturally_consistent_bandwidth")
 
             # 3. Spectral Centroid Variance — AI speech has more stable centroid
-            centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-            centroid_cv = float(np.std(centroid) / (np.mean(centroid) + 1e-10))
-            details["spectral_centroid_cv"] = round(centroid_cv, 4)
+            spectral_centroid_frames = librosa.feature.spectral_centroid(y=audio_samples, sr=sample_rate)[0]
+            spectral_centroid_coefficient_variation = float(np.std(spectral_centroid_frames) / (np.mean(spectral_centroid_frames) + 1e-10))
+            details["spectral_centroid_cv"] = round(spectral_centroid_coefficient_variation, 4)
 
-            if centroid_cv < 0.15:
+            if spectral_centroid_coefficient_variation < 0.15:
                 artifacts.append("unnaturally_stable_spectral_centroid")
 
             # Optimization: Removed expensive HPSS and full STFT
@@ -119,55 +119,55 @@ class TemporalAnalyzer:
     - Consistent zero-crossing rate
     """
 
-    def analyze(self, y: np.ndarray, sr: int) -> AnalyzerResult:
+    def analyze(self, audio_samples: np.ndarray, sample_rate: int) -> AnalyzerResult:
         artifacts = []
         details = {}
 
         try:
             # 1. Energy contour smoothness
-            frame_length = int(0.025 * sr)
-            hop_length = int(0.010 * sr)
-            rms = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+            frame_length = int(0.025 * sample_rate)
+            hop_length = int(0.010 * sample_rate)
+            rms_energy_frames = librosa.feature.rms(y=audio_samples, frame_length=frame_length, hop_length=hop_length)[0]
 
-            if len(rms) > 10:
-                rms_diff = np.diff(rms)
-                energy_roughness = float(np.std(rms_diff) / (np.mean(rms) + 1e-10))
+            if len(rms_energy_frames) > 10:
+                rms_energy_differences = np.diff(rms_energy_frames)
+                energy_roughness = float(np.std(rms_energy_differences) / (np.mean(rms_energy_frames) + 1e-10))
                 details["energy_roughness"] = round(energy_roughness, 4)
 
                 if energy_roughness < 0.08:
                     artifacts.append("unnaturally_smooth_energy_contour")
 
             # 2. Zero-Crossing Rate consistency
-            zcr = librosa.feature.zero_crossing_rate(y, frame_length=frame_length, hop_length=hop_length)[0]
-            zcr_cv = float(np.std(zcr) / (np.mean(zcr) + 1e-10))
-            details["zcr_coefficient_of_variation"] = round(zcr_cv, 4)
+            zero_crossing_rate_frames = librosa.feature.zero_crossing_rate(audio_samples, frame_length=frame_length, hop_length=hop_length)[0]
+            zero_crossing_rate_coefficient_variation = float(np.std(zero_crossing_rate_frames) / (np.mean(zero_crossing_rate_frames) + 1e-10))
+            details["zcr_coefficient_of_variation"] = round(zero_crossing_rate_coefficient_variation, 4)
 
-            if zcr_cv < 0.25:
+            if zero_crossing_rate_coefficient_variation < 0.25:
                 artifacts.append("unnaturally_consistent_zero_crossings")
 
             # 3. Pause regularity analysis
-            silence_threshold = np.percentile(np.abs(y), 10)
-            is_silent = np.abs(y) < silence_threshold * 3
-            silent_changes = np.diff(is_silent.astype(int))
-            pause_starts = np.where(silent_changes == 1)[0]
+            silence_threshold = np.percentile(np.abs(audio_samples), 10)
+            is_silent_frame = np.abs(audio_samples) < silence_threshold * 3
+            silence_boundary_changes = np.diff(is_silent_frame.astype(int))
+            pause_start_indices = np.where(silence_boundary_changes == 1)[0]
             
-            if len(pause_starts) >= 3:
-                pause_intervals = np.diff(pause_starts) / sr
-                interval_cv = float(np.std(pause_intervals) / (np.mean(pause_intervals) + 1e-10))
-                details["pause_interval_cv"] = round(interval_cv, 4)
-                details["num_pauses"] = len(pause_starts)
+            if len(pause_start_indices) >= 3:
+                pause_interval_durations = np.diff(pause_start_indices) / sample_rate
+                pause_interval_coefficient_variation = float(np.std(pause_interval_durations) / (np.mean(pause_interval_durations) + 1e-10))
+                details["pause_interval_cv"] = round(pause_interval_coefficient_variation, 4)
+                details["num_pauses"] = len(pause_start_indices)
 
-                if interval_cv < 0.2 and len(pause_starts) > 3:
+                if pause_interval_coefficient_variation < 0.2 and len(pause_start_indices) > 3:
                     artifacts.append("metronomic_pause_timing")
 
             # 4. Micro-jitter analysis (Optimized)
-            if float(len(y)) / sr > 0.5:
+            if float(len(audio_samples)) / sample_rate > 0.5:
                 # Fast energy variance check instead of full autocorrelation loop
-                chunk_size = int(0.1 * sr)
+                chunk_size = int(0.1 * sample_rate)
                 # Reshape to chunks (discard remainder)
-                n_chunks = len(y) // chunk_size
+                n_chunks = len(audio_samples) // chunk_size
                 if n_chunks > 4:
-                    chunks = y[:n_chunks*chunk_size].reshape(n_chunks, chunk_size)
+                    chunks = audio_samples[:n_chunks*chunk_size].reshape(n_chunks, chunk_size)
                     chunk_energies = np.sqrt(np.mean(chunks**2, axis=1))
                     
                     # Check if energy variation is too regular
@@ -202,26 +202,26 @@ class FormantAnalyzer:
     Optimized to use MFCCs as proxy for formants.
     """
 
-    def analyze(self, y: np.ndarray, sr: int) -> AnalyzerResult:
+    def analyze(self, audio_samples: np.ndarray, sample_rate: int) -> AnalyzerResult:
         artifacts = []
         details = {}
 
         try:
             # 1. MFCC stability
-            mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+            mfcc_features = librosa.feature.mfcc(y=audio_samples, sr=sample_rate, n_mfcc=13)
             # Vectorized variation coefficient
-            means = np.abs(np.mean(mfccs[1:], axis=1)) + 1e-10
-            stds = np.std(mfccs[1:], axis=1)
-            mfcc_cvs = stds / means
+            mfcc_coefficient_means = np.abs(np.mean(mfcc_features[1:], axis=1)) + 1e-10
+            mfcc_coefficient_stds = np.std(mfcc_features[1:], axis=1)
+            mfcc_coefficient_variations = mfcc_coefficient_stds / mfcc_coefficient_means
             
-            avg_mfcc_cv = float(np.mean(mfcc_cvs))
-            details["avg_mfcc_cv"] = round(avg_mfcc_cv, 4)
+            average_mfcc_coefficient_variation = float(np.mean(mfcc_coefficient_variations))
+            details["avg_mfcc_cv"] = round(average_mfcc_coefficient_variation, 4)
 
-            if avg_mfcc_cv < 0.5:
+            if average_mfcc_coefficient_variation < 0.5:
                 artifacts.append("unnaturally_stable_formant_structure")
 
             # 2. Delta smoothness
-            mfcc_deltas = librosa.feature.delta(mfccs)
+            mfcc_deltas = librosa.feature.delta(mfcc_features)
             delta_roughness = float(np.mean(np.abs(librosa.feature.delta(mfcc_deltas))))
             details["delta_mfcc_roughness"] = round(delta_roughness, 4)
 
@@ -229,28 +229,28 @@ class FormantAnalyzer:
                 artifacts.append("overly_smooth_formant_transitions")
 
             # 3. Inter-frame correlation (Vectorized)
-            if mfccs.shape[1] > 10:
+            if mfcc_features.shape[1] > 10:
                 # Vectorized correlation between adjacent frames
                 # Normalize frames
-                frames = mfccs.T
-                f_mean = frames.mean(axis=1, keepdims=True)
-                f_std = frames.std(axis=1, keepdims=True) + 1e-10
-                frames_norm = (frames - f_mean) / f_std
+                mfcc_frames = mfcc_features.T
+                frame_means = mfcc_frames.mean(axis=1, keepdims=True)
+                frame_stds = mfcc_frames.std(axis=1, keepdims=True) + 1e-10
+                normalized_mfcc_frames = (mfcc_frames - frame_means) / frame_stds
                 
                 # Compute correlation of frame i with i+1
                 # Sum of product of normalized values / N
-                corrs = np.mean(frames_norm[:-1] * frames_norm[1:], axis=1)
-                mean_corr = float(np.mean(corrs))
+                inter_frame_correlations = np.mean(normalized_mfcc_frames[:-1] * normalized_mfcc_frames[1:], axis=1)
+                mean_inter_frame_correlation = float(np.mean(inter_frame_correlations))
                 
-                details["inter_frame_correlation"] = round(mean_corr, 4)
+                details["inter_frame_correlation"] = round(mean_inter_frame_correlation, 4)
 
-                if mean_corr > 0.95:
+                if mean_inter_frame_correlation > 0.95:
                     artifacts.append("excessive_inter_frame_correlation")
 
             # 4. Mel-band energy uniformity (uses MFCCs as proxy instead of new melspectrogram for speed)
             # MFCC[0] is energy; use variance of MFCCs as rough proxy for band variance
-            mfcc_var_range = float(np.max(stds) - np.min(stds))
-            if mfcc_var_range < 2.0:
+            mfcc_coefficient_std_range = float(np.max(mfcc_coefficient_stds) - np.min(mfcc_coefficient_stds))
+            if mfcc_coefficient_std_range < 2.0:
                  artifacts.append("uniform_mel_band_energy")
 
             score = min(1.0, len(artifacts) * 0.3)
@@ -279,42 +279,42 @@ class ArtifactDetector:
     Detects synthesis artifacts in the raw waveform.
     """
 
-    def analyze(self, y: np.ndarray, sr: int) -> AnalyzerResult:
+    def analyze(self, audio_samples: np.ndarray, sample_rate: int) -> AnalyzerResult:
         artifacts = []
         details = {}
 
         try:
             # 1. Click / pop detection
             # Use diff for fast gradient check
-            diffs = np.abs(np.diff(y))
-            threshold = np.std(y) * 6  # Higher threshold
-            clicks = np.count_nonzero(diffs > threshold)
-            click_rate = clicks / (len(y) / sr)
+            sample_differences = np.abs(np.diff(audio_samples))
+            threshold = np.std(audio_samples) * 6  # Higher threshold
+            clicks = np.count_nonzero(sample_differences > threshold)
+            click_rate = clicks / (len(audio_samples) / sample_rate)
             details["click_rate_per_sec"] = round(click_rate, 2)
 
             if click_rate > 10:
                 artifacts.append("synthesis_click_artifacts")
 
             # 2. Waveform symmetry
-            pos_vals = y[y > 0]
-            neg_vals = y[y < 0]
-            if len(pos_vals) > 0 and len(neg_vals) > 0:
-                pos_rms = np.sqrt(np.mean(pos_vals ** 2))
-                neg_rms = np.sqrt(np.mean(neg_vals ** 2))
-                symmetry = float(pos_rms / (neg_rms + 1e-10))
+            positive_samples = audio_samples[audio_samples > 0]
+            negative_samples = audio_samples[audio_samples < 0]
+            if len(positive_samples) > 0 and len(negative_samples) > 0:
+                positive_rms_energy = np.sqrt(np.mean(positive_samples ** 2))
+                negative_rms_energy = np.sqrt(np.mean(negative_samples ** 2))
+                symmetry = float(positive_rms_energy / (negative_rms_energy + 1e-10))
                 details["waveform_symmetry"] = round(symmetry, 4)
 
                 if abs(symmetry - 1.0) > 0.3:
                     artifacts.append("asymmetric_waveform")
 
             # 3. Silence segment quality
-            silence_mask = np.abs(y) < 0.001
-            if np.any(silence_mask):
-                silent_vals = y[silence_mask]
-                silence_noise_floor = float(np.std(silent_vals))
-                details["silence_noise_floor"] = round(silence_noise_floor, 6)
+            silence_sample_mask = np.abs(audio_samples) < 0.001
+            if np.any(silence_sample_mask):
+                silent_audio_samples = audio_samples[silence_sample_mask]
+                silence_noise_floor_level = float(np.std(silent_audio_samples))
+                details["silence_noise_floor"] = round(silence_noise_floor_level, 6)
 
-                if silence_noise_floor < 1e-6 and len(silent_vals) > sr * 0.05:
+                if silence_noise_floor_level < 1e-6 and len(silent_audio_samples) > sample_rate * 0.05:
                     artifacts.append("digitally_perfect_silence")
 
             # 4. Periodicity (Optimized - simple zcr based check instead of expensive autocorrelation)
@@ -356,16 +356,16 @@ class ForensicEngine:
         # Initialize thread pool
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
-    def analyze(self, y: np.ndarray, sr: int) -> Dict[str, Any]:
+    def analyze(self, audio_samples: np.ndarray, sample_rate: int) -> Dict[str, Any]:
         """Run all analyzers in PARALLEL and return combined report."""
         results = {}
 
         # Define tasks
         tasks = {
-            self._executor.submit(self.spectral.analyze, y, sr): "spectral",
-            self._executor.submit(self.temporal.analyze, y, sr): "temporal",
-            self._executor.submit(self.formant.analyze, y, sr): "formant",
-            self._executor.submit(self.artifact.analyze, y, sr): "artifact"
+            self._executor.submit(self.spectral.analyze, audio_samples, sample_rate): "spectral",
+            self._executor.submit(self.temporal.analyze, audio_samples, sample_rate): "temporal",
+            self._executor.submit(self.formant.analyze, audio_samples, sample_rate): "formant",
+            self._executor.submit(self.artifact.analyze, audio_samples, sample_rate): "artifact"
         }
 
         # Wait for all to complete
@@ -397,22 +397,22 @@ class ForensicEngine:
             "artifact_detection": 0.20,
         }
 
-        weighted_sum = 0.0
-        total_weight = 0.0
+        weighted_score_sum = 0.0
+        total_analyzer_weight = 0.0
         for name, result in forensic_results.items():
             if name == "error": continue
-            w = weights.get(name, 0.25)
-            weighted_sum += result.get("score", 0.5) * w
-            total_weight += w
+            analyzer_weight = weights.get(name, 0.25)
+            weighted_score_sum += result.get("score", 0.5) * analyzer_weight
+            total_analyzer_weight += analyzer_weight
 
-        return round(weighted_sum / (total_weight + 1e-10), 4)
+        return round(weighted_score_sum / (total_analyzer_weight + 1e-10), 4)
 
     def get_all_artifacts(self, forensic_results: Dict[str, Any]) -> List[str]:
         """Collect all artifacts found across all analyzers."""
-        all_artifacts = []
+        combined_artifacts = []
         for result in forensic_results.values():
-            all_artifacts.extend(result.get("artifacts_found", []))
-        return all_artifacts
+            combined_artifacts.extend(result.get("artifacts_found", []))
+        return combined_artifacts
 
 
 # Singleton instance
